@@ -11,6 +11,7 @@
 
 <meta name="author" content="Frederick Cabasa" />
 
+<meta name="date" content="2018-02-11" />
 
 <title>Practical Machine Learning Course Project</title>
 
@@ -118,7 +119,7 @@ $(document).ready(function () {
 
 <h1 class="title toc-ignore">Practical Machine Learning Course Project</h1>
 <h4 class="author"><em>Frederick Cabasa</em></h4>
-<h4 class="date"><em>February 4, 2018</em></h4>
+<h4 class="date"><em>February 11, 2018</em></h4>
 
 </div>
 
@@ -130,8 +131,12 @@ $(document).ready(function () {
 <div id="loading-r-packages" class="section level2">
 <h2>Loading R Packages</h2>
 <p>Before we begin processing the data, we will load the R packages that will be used for this project.</p>
+<pre class="r"><code>library(caret)</code></pre>
 <pre><code>## Loading required package: lattice</code></pre>
 <pre><code>## Loading required package: ggplot2</code></pre>
+<pre class="r"><code>library(lattice)
+library(ggplot2)
+library(randomForest)</code></pre>
 <pre><code>## randomForest 4.6-12</code></pre>
 <pre><code>## Type rfNews() to see new features/changes/bug fixes.</code></pre>
 <pre><code>## 
@@ -139,98 +144,137 @@ $(document).ready(function () {
 <pre><code>## The following object is masked from 'package:ggplot2':
 ## 
 ##     margin</code></pre>
+<pre class="r"><code>library(klaR)</code></pre>
 <pre><code>## Loading required package: MASS</code></pre>
+<pre class="r"><code>library(MASS)</code></pre>
 </div>
 <div id="loading-and-reading-the-data" class="section level2">
 <h2>Loading and Reading the Data</h2>
 <p>For the loading piece, we have loaded the test and training sets from the URLs provided.</p>
+<pre class="r"><code>training.data.file   &lt;- 'pml-training.csv'
+test.data.file &lt;- 'pml-test.csv'
+training.data.url    &lt;- 'http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv'
+test.data.url  &lt;- 'http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv'
+
+download.file(training.data.url, training.data.file)
+download.file(test.data.url,test.data.file)</code></pre>
 <p>We will then read in the data and replace the blank strings, factor the classe variable, and remove any NA or empty value columns that are not contributing to the model from the dataset.</p>
+<pre class="r"><code>PMLTrainingFile &lt;- read.csv(file = training.data.file, na.strings = c(&quot;NA&quot;, &quot;#DIV/0!&quot;, &quot;&quot;))
+PMLTestingFile &lt;- read.csv(file = test.data.file, na.strings = c(&quot;NA&quot;, &quot;#DIV/0!&quot;, &quot;&quot;))
+
+PMLTrainingFile$classe &lt;- as.factor(PMLTrainingFile$classe)
+
+PMLTrainingFile &lt;- PMLTrainingFile[, colSums(is.na(PMLTrainingFile)) == 0]
+PMLTestingFile &lt;- PMLTestingFile[, colSums(is.na(PMLTestingFile)) == 0]</code></pre>
 </div>
 <div id="cleaning-the-data" class="section level2">
 <h2>Cleaning the Data</h2>
 <p>The training and test data have different NA columns. To avoid overfitting, we will continue to use the other variables found in the training dataset that are not included in the test dataset after NA is removed.</p>
 <p>The first 7 columns of the training file deal with user names, timestamp, and window variable. Since this is not a time series analysis we will remove the timestamp variables. We will also delete the new window and number window variables since they are booleans. We will keep the user name since the user might play a significance in the outcomes. The X variable is a row ID which should not play any significance in the outcomes.</p>
+<pre class="r"><code>PMLTrainingFile &lt;- PMLTrainingFile[-(3:7)]
+PMLTrainingFile &lt;- PMLTrainingFile[-(1)]</code></pre>
 </div>
 <div id="training-and-test-datasets" class="section level2">
 <h2>Training and Test Datasets</h2>
 <p>We will split the training file into 70% training set and 30% validation set.</p>
+<pre class="r"><code>set.seed(777)
+training_partition &lt;- createDataPartition(PMLTrainingFile$classe, p = 0.7, list = FALSE)
+PMLTraining &lt;- PMLTrainingFile[training_partition,]
+PMLValidation &lt;- PMLTrainingFile[-training_partition,]
+PMLTesting &lt;- PMLTestingFile</code></pre>
 </div>
 <div id="cross-validation-and-model-building" class="section level2">
 <h2>Cross Validation and Model Building</h2>
 <p>We will create a 5-fold cross validation object before running performing our model building step.</p>
+<pre class="r"><code>set.seed(777)
+PMLControl &lt;- trainControl(method='repeatedcv', number = 5)</code></pre>
 <p>We will use the following machine learning algoriths to see which model performs the best based on the lowest test error rate: random forest decision tree generalized boosted regression model naive bayes linear discriminant analysis quadratic discriminant analysis</p>
 <p>Each model will be trained and then tested against the validation set using a confusion matrix output.</p>
 <div id="random-forest-with-5-fold-cross-validation" class="section level3">
 <h3>Random Forest with 5-fold cross validation</h3>
+<pre class="r"><code>set.seed(777)
+modRF &lt;- train(classe ~., method = 'rf', data = PMLTraining, trControl=PMLControl, ntree = 200)
+modRFModel &lt;- modRF$finalmodel
+
+predictRF &lt;- predict(modRF, PMLValidation)
+confusionMatrix(PMLValidation$classe, predictRF)</code></pre>
 <pre><code>## Confusion Matrix and Statistics
 ## 
 ##           Reference
 ## Prediction    A    B    C    D    E
-##          A 1671    2    0    0    1
-##          B    7 1132    0    0    0
-##          C    0    3 1019    4    0
-##          D    0    1   17  946    0
-##          E    0    0    0    2 1080
+##          A 1671    0    3    0    0
+##          B    9 1125    5    0    0
+##          C    0    2 1022    2    0
+##          D    0    1   10  953    0
+##          E    0    0    3    3 1076
 ## 
 ## Overall Statistics
 ##                                           
-##                Accuracy : 0.9937          
-##                  95% CI : (0.9913, 0.9956)
-##     No Information Rate : 0.2851          
+##                Accuracy : 0.9935          
+##                  95% CI : (0.9911, 0.9954)
+##     No Information Rate : 0.2855          
 ##     P-Value [Acc &gt; NIR] : &lt; 2.2e-16       
 ##                                           
-##                   Kappa : 0.992           
+##                   Kappa : 0.9918          
 ##  Mcnemar's Test P-Value : NA              
 ## 
 ## Statistics by Class:
 ## 
 ##                      Class: A Class: B Class: C Class: D Class: E
-## Sensitivity            0.9958   0.9947   0.9836   0.9937   0.9991
-## Specificity            0.9993   0.9985   0.9986   0.9964   0.9996
-## Pos Pred Value         0.9982   0.9939   0.9932   0.9813   0.9982
-## Neg Pred Value         0.9983   0.9987   0.9965   0.9988   0.9998
-## Prevalence             0.2851   0.1934   0.1760   0.1618   0.1837
-## Detection Rate         0.2839   0.1924   0.1732   0.1607   0.1835
+## Sensitivity            0.9946   0.9973   0.9799   0.9948   1.0000
+## Specificity            0.9993   0.9971   0.9992   0.9978   0.9988
+## Pos Pred Value         0.9982   0.9877   0.9961   0.9886   0.9945
+## Neg Pred Value         0.9979   0.9994   0.9957   0.9990   1.0000
+## Prevalence             0.2855   0.1917   0.1772   0.1628   0.1828
+## Detection Rate         0.2839   0.1912   0.1737   0.1619   0.1828
 ## Detection Prevalence   0.2845   0.1935   0.1743   0.1638   0.1839
-## Balanced Accuracy      0.9976   0.9966   0.9911   0.9950   0.9993</code></pre>
+## Balanced Accuracy      0.9970   0.9972   0.9895   0.9963   0.9994</code></pre>
 </div>
 <div id="decision-tree-with-cart-and-5-fold-cross-validation" class="section level3">
 <h3>Decision Tree with CART and 5-fold cross validation</h3>
+<pre class="r"><code>set.seed(777)
+modCART &lt;- train(classe ~., method = 'rpart', data = PMLTraining, trControl = PMLControl)</code></pre>
 <pre><code>## Loading required package: rpart</code></pre>
+<pre class="r"><code>modCARTModel &lt;- modCART$finalmodel
+
+predictCART &lt;- predict(modCART, PMLValidation)
+confusionMatrix(PMLValidation$classe, predictCART)</code></pre>
 <pre><code>## Confusion Matrix and Statistics
 ## 
 ##           Reference
 ## Prediction    A    B    C    D    E
-##          A 1018  217  317  118    4
-##          B  167  572  205  195    0
-##          C   28  127  851   20    0
-##          D   52  158  299  455    0
-##          E   15  304  222   66  475
+##          A 1670    0    0    0    4
+##          B 1139    0    0    0    0
+##          C 1026    0    0    0    0
+##          D  964    0    0    0    0
+##          E  604    0    0    0  478
 ## 
 ## Overall Statistics
 ##                                           
-##                Accuracy : 0.5728          
-##                  95% CI : (0.5601, 0.5855)
-##     No Information Rate : 0.3218          
-##     P-Value [Acc &gt; NIR] : &lt; 2.2e-16       
+##                Accuracy : 0.365           
+##                  95% CI : (0.3527, 0.3774)
+##     No Information Rate : 0.9181          
+##     P-Value [Acc &gt; NIR] : 1               
 ##                                           
-##                   Kappa : 0.4647          
-##  Mcnemar's Test P-Value : &lt; 2.2e-16       
+##                   Kappa : 0.1227          
+##  Mcnemar's Test P-Value : NA              
 ## 
 ## Statistics by Class:
 ## 
 ##                      Class: A Class: B Class: C Class: D Class: E
-## Sensitivity            0.7953   0.4151   0.4493  0.53279  0.99165
-## Specificity            0.8575   0.8742   0.9562  0.89883  0.88772
-## Pos Pred Value         0.6081   0.5022   0.8294  0.47199  0.43900
-## Neg Pred Value         0.9378   0.8302   0.7853  0.91892  0.99917
-## Prevalence             0.2175   0.2342   0.3218  0.14511  0.08139
-## Detection Rate         0.1730   0.0972   0.1446  0.07732  0.08071
-## Detection Prevalence   0.2845   0.1935   0.1743  0.16381  0.18386
-## Balanced Accuracy      0.8264   0.6446   0.7027  0.71581  0.93968</code></pre>
+## Sensitivity            0.3091       NA       NA       NA  0.99170
+## Specificity            0.9917   0.8065   0.8257   0.8362  0.88821
+## Pos Pred Value         0.9976       NA       NA       NA  0.44177
+## Neg Pred Value         0.1135       NA       NA       NA  0.99917
+## Prevalence             0.9181   0.0000   0.0000   0.0000  0.08190
+## Detection Rate         0.2838   0.0000   0.0000   0.0000  0.08122
+## Detection Prevalence   0.2845   0.1935   0.1743   0.1638  0.18386
+## Balanced Accuracy      0.6504       NA       NA       NA  0.93996</code></pre>
 </div>
 <div id="prediction-with-generalized-boosted-regression" class="section level3">
 <h3>Prediction with generalized boosted regression</h3>
+<pre class="r"><code>set.seed(777)
+modGBM &lt;- train(classe ~., method = 'gbm', data = PMLTraining, trControl = PMLControl, verbose = FALSE)</code></pre>
 <pre><code>## Loading required package: gbm</code></pre>
 <pre><code>## Loading required package: survival</code></pre>
 <pre><code>## 
@@ -242,181 +286,221 @@ $(document).ready(function () {
 <pre><code>## Loading required package: parallel</code></pre>
 <pre><code>## Loaded gbm 2.1.3</code></pre>
 <pre><code>## Loading required package: plyr</code></pre>
+<pre class="r"><code>modGBMModel &lt;- modGBM$finalmodel
+
+predictGBM &lt;- predict(modGBM, PMLValidation)
+confusionMatrix(PMLValidation$classe, predictGBM)</code></pre>
 <pre><code>## Confusion Matrix and Statistics
 ## 
 ##           Reference
 ## Prediction    A    B    C    D    E
-##          A 1634   25   12    3    0
-##          B   37 1069   32    0    1
-##          C    0   31  987    7    1
-##          D    2    5   35  919    3
-##          E    1   10    8   14 1049
+##          A 1651    9    8    6    0
+##          B   39 1063   35    1    1
+##          C    0   23  990   11    2
+##          D    1    5   31  913   14
+##          E    3   12   15   13 1039
 ## 
 ## Overall Statistics
 ##                                           
-##                Accuracy : 0.9614          
-##                  95% CI : (0.9562, 0.9662)
-##     No Information Rate : 0.2845          
+##                Accuracy : 0.9611          
+##                  95% CI : (0.9558, 0.9659)
+##     No Information Rate : 0.2879          
 ##     P-Value [Acc &gt; NIR] : &lt; 2.2e-16       
 ##                                           
-##                   Kappa : 0.9512          
-##  Mcnemar's Test P-Value : 5.291e-09       
+##                   Kappa : 0.9508          
+##  Mcnemar's Test P-Value : 1.481e-10       
 ## 
 ## Statistics by Class:
 ## 
 ##                      Class: A Class: B Class: C Class: D Class: E
-## Sensitivity            0.9761   0.9377   0.9190   0.9745   0.9953
-## Specificity            0.9905   0.9852   0.9919   0.9909   0.9932
-## Pos Pred Value         0.9761   0.9385   0.9620   0.9533   0.9695
-## Neg Pred Value         0.9905   0.9850   0.9821   0.9951   0.9990
-## Prevalence             0.2845   0.1937   0.1825   0.1602   0.1791
-## Detection Rate         0.2777   0.1816   0.1677   0.1562   0.1782
+## Sensitivity            0.9746   0.9559   0.9175   0.9672   0.9839
+## Specificity            0.9945   0.9841   0.9925   0.9897   0.9911
+## Pos Pred Value         0.9863   0.9333   0.9649   0.9471   0.9603
+## Neg Pred Value         0.9898   0.9897   0.9817   0.9937   0.9965
+## Prevalence             0.2879   0.1890   0.1833   0.1604   0.1794
+## Detection Rate         0.2805   0.1806   0.1682   0.1551   0.1766
 ## Detection Prevalence   0.2845   0.1935   0.1743   0.1638   0.1839
-## Balanced Accuracy      0.9833   0.9615   0.9554   0.9827   0.9942</code></pre>
+## Balanced Accuracy      0.9846   0.9700   0.9550   0.9784   0.9875</code></pre>
 </div>
 <div id="naive-bayes" class="section level3">
 <h3>Naive Bayes</h3>
+<pre class="r"><code>set.seed(777)
+modNB &lt;- train(classe ~., method = 'nb', data = PMLTraining, trControl = PMLControl)
+modNBModel &lt;- modNB$finalmodel
+
+predictNB &lt;- predict(modNB, PMLValidation)
+confusionMatrix(PMLValidation$classe, predictNB)</code></pre>
 <pre><code>## Confusion Matrix and Statistics
 ## 
 ##           Reference
 ## Prediction    A    B    C    D    E
-##          A 1235   58  187  189    5
-##          B  102  802  152   64   19
-##          C   58   61  861   43    3
-##          D   62    3  183  669   47
-##          E   33  111   52   41  845
+##          A 1522   20   33   95    4
+##          B  251  765   64   53    6
+##          C  285   57  631   52    1
+##          D  237    5  102  577   43
+##          E   73   87   37   38  847
 ## 
 ## Overall Statistics
-##                                           
-##                Accuracy : 0.7497          
-##                  95% CI : (0.7384, 0.7607)
-##     No Information Rate : 0.2532          
-##     P-Value [Acc &gt; NIR] : &lt; 2.2e-16       
-##                                           
-##                   Kappa : 0.685           
-##  Mcnemar's Test P-Value : &lt; 2.2e-16       
+##                                          
+##                Accuracy : 0.7378         
+##                  95% CI : (0.7264, 0.749)
+##     No Information Rate : 0.4024         
+##     P-Value [Acc &gt; NIR] : &lt; 2.2e-16      
+##                                          
+##                   Kappa : 0.6631         
+##  Mcnemar's Test P-Value : &lt; 2.2e-16      
 ## 
 ## Statistics by Class:
 ## 
 ##                      Class: A Class: B Class: C Class: D Class: E
-## Sensitivity            0.8289   0.7749   0.6000   0.6650   0.9195
-## Specificity            0.9001   0.9305   0.9629   0.9395   0.9523
-## Pos Pred Value         0.7378   0.7041   0.8392   0.6940   0.7810
-## Neg Pred Value         0.9394   0.9509   0.8819   0.9315   0.9846
-## Prevalence             0.2532   0.1759   0.2438   0.1709   0.1562
-## Detection Rate         0.2099   0.1363   0.1463   0.1137   0.1436
-## Detection Prevalence   0.2845   0.1935   0.1743   0.1638   0.1839
-## Balanced Accuracy      0.8645   0.8527   0.7815   0.8023   0.9359</code></pre>
+## Sensitivity            0.6427   0.8191   0.7278  0.70798   0.9401
+## Specificity            0.9568   0.9245   0.9213  0.92367   0.9528
+## Pos Pred Value         0.9092   0.6716   0.6150  0.59855   0.7828
+## Neg Pred Value         0.7991   0.9644   0.9514  0.95164   0.9888
+## Prevalence             0.4024   0.1587   0.1473  0.13849   0.1531
+## Detection Rate         0.2586   0.1300   0.1072  0.09805   0.1439
+## Detection Prevalence   0.2845   0.1935   0.1743  0.16381   0.1839
+## Balanced Accuracy      0.7998   0.8718   0.8245  0.81582   0.9465</code></pre>
 </div>
 <div id="linear-discriminant-analysis" class="section level3">
 <h3>Linear discriminant analysis</h3>
+<pre class="r"><code>set.seed(777)
+modLDA &lt;- train(classe ~., method = 'lda', data = PMLTraining, trControl = PMLControl)
+modLDAModel &lt;- modLDA$finalmodel
+
+predictLDA &lt;- predict(modLDA, PMLValidation)
+confusionMatrix(PMLValidation$classe, predictLDA)</code></pre>
 <pre><code>## Confusion Matrix and Statistics
 ## 
 ##           Reference
 ## Prediction    A    B    C    D    E
-##          A 1407   51  103  112    1
-##          B  179  759  123   41   37
-##          C  118  109  671  111   17
-##          D   63   42  102  741   16
-##          E   33  155   66   89  739
+##          A 1447   32   96   98    1
+##          B  160  746  146   44   43
+##          C  109  106  675  124   12
+##          D   64   41  110  739   10
+##          E   30  158   76   86  732
 ## 
 ## Overall Statistics
 ##                                           
-##                Accuracy : 0.7336          
-##                  95% CI : (0.7221, 0.7448)
-##     No Information Rate : 0.3059          
+##                Accuracy : 0.7373          
+##                  95% CI : (0.7259, 0.7485)
+##     No Information Rate : 0.3076          
 ##     P-Value [Acc &gt; NIR] : &lt; 2.2e-16       
 ##                                           
-##                   Kappa : 0.6623          
+##                   Kappa : 0.667           
 ##  Mcnemar's Test P-Value : &lt; 2.2e-16       
 ## 
 ## Statistics by Class:
 ## 
 ##                      Class: A Class: B Class: C Class: D Class: E
-## Sensitivity            0.7817   0.6801   0.6300   0.6773   0.9123
-## Specificity            0.9346   0.9203   0.9263   0.9535   0.9324
-## Pos Pred Value         0.8405   0.6664   0.6540   0.7687   0.6830
-## Neg Pred Value         0.9067   0.9248   0.9189   0.9283   0.9852
-## Prevalence             0.3059   0.1896   0.1810   0.1859   0.1376
-## Detection Rate         0.2391   0.1290   0.1140   0.1259   0.1256
+## Sensitivity            0.7994   0.6888   0.6120   0.6774   0.9173
+## Specificity            0.9443   0.9182   0.9266   0.9531   0.9312
+## Pos Pred Value         0.8644   0.6550   0.6579   0.7666   0.6765
+## Neg Pred Value         0.9138   0.9290   0.9119   0.9285   0.9863
+## Prevalence             0.3076   0.1840   0.1874   0.1854   0.1356
+## Detection Rate         0.2459   0.1268   0.1147   0.1256   0.1244
 ## Detection Prevalence   0.2845   0.1935   0.1743   0.1638   0.1839
-## Balanced Accuracy      0.8582   0.8002   0.7782   0.8154   0.9224</code></pre>
+## Balanced Accuracy      0.8719   0.8035   0.7693   0.8152   0.9242</code></pre>
 </div>
 <div id="quadratic-discriminant-analysis" class="section level3">
 <h3>Quadratic discriminant analysis</h3>
+<pre class="r"><code>set.seed(777)
+modQDA &lt;- train(classe ~., method = 'qda', data = PMLTraining, trControl = PMLControl)
+modQDAModel &lt;- modQDA$finalModel
+
+predictQDA &lt;- predict(modQDA, PMLValidation)
+confusionMatrix(PMLValidation$classe, predictQDA)</code></pre>
 <pre><code>## Confusion Matrix and Statistics
 ## 
 ##           Reference
 ## Prediction    A    B    C    D    E
-##          A 1575   66   16   11    6
-##          B   70  977   72    8   12
-##          C    0   40  978    4    4
-##          D    3    5  105  844    7
-##          E    0   30   36   26  990
+##          A 1564   67   20   18    5
+##          B   33 1019   77    5    5
+##          C    0   42  979    3    2
+##          D    2    2   93  855   12
+##          E    0   26   43   28  985
 ## 
 ## Overall Statistics
 ##                                           
-##                Accuracy : 0.9115          
-##                  95% CI : (0.9039, 0.9186)
-##     No Information Rate : 0.28            
+##                Accuracy : 0.9179          
+##                  95% CI : (0.9106, 0.9248)
+##     No Information Rate : 0.2717          
 ##     P-Value [Acc &gt; NIR] : &lt; 2.2e-16       
 ##                                           
-##                   Kappa : 0.8881          
+##                   Kappa : 0.8964          
 ##  Mcnemar's Test P-Value : &lt; 2.2e-16       
 ## 
 ## Statistics by Class:
 ## 
 ##                      Class: A Class: B Class: C Class: D Class: E
-## Sensitivity            0.9557   0.8739   0.8103   0.9451   0.9715
-## Specificity            0.9766   0.9660   0.9897   0.9760   0.9811
-## Pos Pred Value         0.9409   0.8578   0.9532   0.8755   0.9150
-## Neg Pred Value         0.9827   0.9703   0.9529   0.9900   0.9940
-## Prevalence             0.2800   0.1900   0.2051   0.1517   0.1732
-## Detection Rate         0.2676   0.1660   0.1662   0.1434   0.1682
+## Sensitivity            0.9781   0.8815   0.8078   0.9406   0.9762
+## Specificity            0.9743   0.9746   0.9899   0.9781   0.9801
+## Pos Pred Value         0.9343   0.8946   0.9542   0.8869   0.9104
+## Neg Pred Value         0.9917   0.9711   0.9520   0.9890   0.9950
+## Prevalence             0.2717   0.1964   0.2059   0.1545   0.1715
+## Detection Rate         0.2658   0.1732   0.1664   0.1453   0.1674
 ## Detection Prevalence   0.2845   0.1935   0.1743   0.1638   0.1839
-## Balanced Accuracy      0.9662   0.9199   0.9000   0.9605   0.9763</code></pre>
+## Balanced Accuracy      0.9762   0.9281   0.8988   0.9593   0.9782</code></pre>
 </div>
 </div>
 <div id="conclusion" class="section level2">
 <h2>Conclusion</h2>
-<p>From the six machine learning algorithms, Random Forest Algorithm produced the best and highest accuracy results with an accuracy of 98.7%.</p>
+<p>From the six machine learning algorithms, Random Forest Algorithm produced the best and highest accuracy results with an accuracy of 99.35%. The expected out-of-sample error is 100-99.35 = 0.65%.</p>
+<div id="prediction-on-test-file" class="section level3">
+<h3>Prediction on test file</h3>
+<p>We will predict the results using the model created from the random forest algorithm since this algorithm had the highest accuracy and lowest out-of-sample error.</p>
+<pre class="r"><code>set.seed(777)
+predictionRF &lt;- predict(modRF, newdata = PMLTesting)
+predictionRF</code></pre>
+<pre><code>##  [1] B A B A A E D B A A B C B A E E A B B B
+## Levels: A B C D E</code></pre>
+</div>
 </div>
 <div id="appendix" class="section level2">
 <h2>Appendix</h2>
 <div id="variable-importance" class="section level3">
 <h3>Variable Importance</h3>
 <p>We will check the variable importance based on the Random Forest model.</p>
+<pre class="r"><code>set.seed(777)
+varImp(modRF)</code></pre>
 <pre><code>## rf variable importance
 ## 
 ##   only 20 most important variables shown (out of 57)
 ## 
 ##                      Overall
 ## roll_belt             100.00
-## pitch_forearm          56.77
-## yaw_belt               55.41
-## pitch_belt             43.88
-## magnet_dumbbell_z      42.77
-## magnet_dumbbell_y      41.28
-## roll_forearm           41.15
-## accel_dumbbell_y       20.63
-## magnet_dumbbell_x      19.05
-## accel_forearm_x        18.69
-## roll_dumbbell          18.60
-## magnet_belt_z          17.69
-## magnet_forearm_z       15.74
-## accel_dumbbell_z       15.37
-## total_accel_dumbbell   13.09
-## magnet_belt_y          13.06
-## accel_belt_z           12.98
-## yaw_arm                12.55
-## magnet_belt_x          11.72
-## gyros_belt_z           11.16</code></pre>
+## pitch_forearm          57.14
+## yaw_belt               55.20
+## pitch_belt             44.77
+## magnet_dumbbell_y      43.24
+## roll_forearm           43.14
+## magnet_dumbbell_z      42.75
+## accel_dumbbell_y       22.01
+## roll_dumbbell          20.56
+## accel_forearm_x        18.91
+## magnet_dumbbell_x      18.87
+## magnet_belt_z          16.65
+## accel_dumbbell_z       15.27
+## magnet_forearm_z       15.08
+## magnet_belt_y          15.07
+## accel_belt_z           14.91
+## total_accel_dumbbell   14.24
+## yaw_arm                12.44
+## gyros_belt_z           11.90
+## magnet_belt_x          11.67</code></pre>
 </div>
 <div id="file-submission" class="section level3">
 <h3>File Submission</h3>
 <p>The following is the code for the file submission using the Random Forest model.</p>
-<p>pml_write_files = function(x){ n = length(x) for(i in 1:n){ filename = paste0(“problem_id_”, i, “.txt”) write.table(x[i], file=filename, quote=FALSE,row.names=FALSE,col.names=FALSE) } }</p>
-<p>pml_write_files(predictionRF)</p>
+<pre class="r"><code>pml_write_files = function(x){
+    n = length(x)
+    for(i in 1:n){
+        filename = paste0(&quot;problem_id_&quot;, i, &quot;.txt&quot;)
+        write.table(x[i], file=filename, quote=FALSE,row.names=FALSE,col.names=FALSE)
+    }
+}
+
+#pml_write_files(predictionRF)</code></pre>
 </div>
 </div>
 
