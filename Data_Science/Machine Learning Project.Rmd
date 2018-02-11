@@ -1,0 +1,206 @@
+---
+title: "Practical Machine Learning Course Project"
+author: "Frederick Cabasa"
+date: "February 11, 2018"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Goals of the Project
+
+The goal of this machine learning project is to analyze data from personal activity devices.  These devices quantify how much of a particular activity is performed.   The goal of this project is to predict the manner and quality in which these so-called self movement enthusiasts performed their exercise.  We will be working with a training set from the weight lifting exercise section of a fitness data repository.  The performance is tracked under the "classe" variable in the training set. We will use the other variables in the training set to predict the performance in this classe variable.   We will gather, analyze, and build prediction model using the various techniques from the Practical Machine Learning course.   The final project will describe the model, the cross validation used, the expected sample error, and the reasons behind the models chosen.   Finally, the final prediction model will be used to predict 20 different test cases.
+
+## Loading R Packages
+
+Before we begin processing the data, we will load the R packages that will be used for this project.
+
+```{r, echo=TRUE}
+library(caret)
+library(lattice)
+library(ggplot2)
+library(randomForest)
+library(klaR)
+library(MASS)
+```
+
+## Loading and Reading the Data
+
+For the loading piece, we have loaded the test and training sets from the URLs provided.  
+
+```{r, echo=TRUE}
+training.data.file   <- 'pml-training.csv'
+test.data.file <- 'pml-test.csv'
+training.data.url    <- 'http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv'
+test.data.url  <- 'http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv'
+
+download.file(training.data.url, training.data.file)
+download.file(test.data.url,test.data.file)
+```
+
+We will then read in the data and replace the blank strings, factor the classe variable, and remove any NA or empty value columns that are not contributing to the model from the dataset.
+ 
+```{r, echo=TRUE, warning=FALSE}
+PMLTrainingFile <- read.csv(file = training.data.file, na.strings = c("NA", "#DIV/0!", ""))
+PMLTestingFile <- read.csv(file = test.data.file, na.strings = c("NA", "#DIV/0!", ""))
+
+PMLTrainingFile$classe <- as.factor(PMLTrainingFile$classe)
+
+PMLTrainingFile <- PMLTrainingFile[, colSums(is.na(PMLTrainingFile)) == 0]
+PMLTestingFile <- PMLTestingFile[, colSums(is.na(PMLTestingFile)) == 0]
+```
+
+
+## Cleaning the Data
+
+The training and test data have different NA columns.  To avoid overfitting, we will continue to use the other variables found in the training dataset that are not included in the test dataset after NA is removed.
+
+The first 7 columns of the training file deal with user names, timestamp, and window variable.   Since this is not a time series analysis we will remove the timestamp variables.  We will also delete the new window and number window variables since they are booleans. We will keep the user name since the user might play a significance in the outcomes.  The X variable is a row ID which should not play any significance in the outcomes.
+
+```{r, echo=TRUE}
+PMLTrainingFile <- PMLTrainingFile[-(3:7)]
+PMLTrainingFile <- PMLTrainingFile[-(1)]
+```
+
+## Training and Test Datasets
+
+We will split the training file into 70% training set and 30% validation set.
+
+```{r, echo=TRUE}
+set.seed(777)
+training_partition <- createDataPartition(PMLTrainingFile$classe, p = 0.7, list = FALSE)
+PMLTraining <- PMLTrainingFile[training_partition,]
+PMLValidation <- PMLTrainingFile[-training_partition,]
+PMLTesting <- PMLTestingFile
+```
+
+## Cross Validation and Model Building
+
+We will create a 5-fold cross validation object before running performing our model building step.
+
+```{r, echo=TRUE}
+set.seed(777)
+PMLControl <- trainControl(method='repeatedcv', number = 5)
+```
+
+We will use the following machine learning algoriths to see which model performs the best based on the lowest test error rate:
+random forest
+decision tree
+generalized boosted regression model
+naive bayes
+linear discriminant analysis
+quadratic discriminant analysis
+
+Each model will be trained and then tested against the validation set using a confusion matrix output.
+
+### Random Forest with 5-fold cross validation
+
+```{r, echo=TRUE}
+set.seed(777)
+modRF <- train(classe ~., method = 'rf', data = PMLTraining, trControl=PMLControl, ntree = 200)
+modRFModel <- modRF$finalmodel
+
+predictRF <- predict(modRF, PMLValidation)
+confusionMatrix(PMLValidation$classe, predictRF)
+```
+
+### Decision Tree with CART and 5-fold cross validation 
+
+```{r, echo=TRUE, warning=FALSE}
+set.seed(777)
+modCART <- train(classe ~., method = 'rpart', data = PMLTraining, trControl = PMLControl)
+modCARTModel <- modCART$finalmodel
+
+predictCART <- predict(modCART, PMLValidation)
+confusionMatrix(PMLValidation$classe, predictCART)
+```
+
+### Prediction with generalized boosted regression
+
+```{r, echo=TRUE, warning=FALSE}
+set.seed(777)
+modGBM <- train(classe ~., method = 'gbm', data = PMLTraining, trControl = PMLControl, verbose = FALSE)
+modGBMModel <- modGBM$finalmodel
+
+predictGBM <- predict(modGBM, PMLValidation)
+confusionMatrix(PMLValidation$classe, predictGBM)
+```
+
+### Naive Bayes
+
+```{r, echo=TRUE, warning=FALSE}
+set.seed(777)
+modNB <- train(classe ~., method = 'nb', data = PMLTraining, trControl = PMLControl)
+modNBModel <- modNB$finalmodel
+
+predictNB <- predict(modNB, PMLValidation)
+confusionMatrix(PMLValidation$classe, predictNB)
+```
+
+### Linear discriminant analysis
+
+```{r, echo=TRUE}
+set.seed(777)
+modLDA <- train(classe ~., method = 'lda', data = PMLTraining, trControl = PMLControl)
+modLDAModel <- modLDA$finalmodel
+
+predictLDA <- predict(modLDA, PMLValidation)
+confusionMatrix(PMLValidation$classe, predictLDA)
+```
+
+### Quadratic discriminant analysis
+
+```{r, echo=TRUE, warning=FALSE}
+set.seed(777)
+modQDA <- train(classe ~., method = 'qda', data = PMLTraining, trControl = PMLControl)
+modQDAModel <- modQDA$finalModel
+
+predictQDA <- predict(modQDA, PMLValidation)
+confusionMatrix(PMLValidation$classe, predictQDA)
+```
+
+
+## Conclusion
+
+From the six machine learning algorithms, Random Forest Algorithm produced the best and highest accuracy results 
+with an accuracy of 99.35%.  The expected out-of-sample error is 100-99.35 = 0.65%.
+
+### Prediction on test file
+We will predict the results using the model created from the random forest algorithm since this algorithm had the highest accuracy and lowest out-of-sample error.
+
+```{r, echo=TRUE, warning=FALSE}
+set.seed(777)
+predictionRF <- predict(modRF, newdata = PMLTesting)
+predictionRF
+```
+
+## Appendix
+
+### Variable Importance
+We will check the variable importance based on the Random Forest model.
+
+```{r, echo=TRUE, warning=FALSE}
+set.seed(777)
+varImp(modRF)
+```
+
+### File Submission
+The following is the code for the file submission using the Random Forest model.
+
+```{r, echo=TRUE, warning=FALSE}
+pml_write_files = function(x){
+    n = length(x)
+    for(i in 1:n){
+        filename = paste0("problem_id_", i, ".txt")
+        write.table(x[i], file=filename, quote=FALSE,row.names=FALSE,col.names=FALSE)
+    }
+}
+
+#pml_write_files(predictionRF)
+```
+
+
